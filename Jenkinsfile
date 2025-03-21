@@ -20,15 +20,15 @@ pipeline {
             steps {
                 script {
                     sh 'npm install -g newman'
-                    sh 'npm install axios fs'
+                    sh 'npm install axios fs csv-parser'
                 }
             }
         }
 
-        stage('Run Load Test with Postman') {
+        stage('Run Load Test with Users') {
             steps {
                 script {
-                    sh 'newman run LMS.postman_collection.json -e LMS.postman_environment.json --reporters cli,json --reporter-json-export results.json'
+                    sh 'node run_newman_with_users.js'
                 }
             }
         }
