@@ -21,6 +21,7 @@ pipeline {
                 script {
                     sh 'npm install -g newman'
                     sh 'npm install axios fs csv-parser'
+                    sh 'npm install csv-parser fs child_process'
                 }
             }
         }
