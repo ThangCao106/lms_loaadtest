@@ -2,6 +2,7 @@ pipeline {
     agent none
     parameters {
         string(name: 'CONCURRENT_USERS', defaultValue: '10', description: 'Số lượng users chạy cùng lúc')
+        string(name: 'LOOP_COUNT', defaultValue: '3', description: 'Số lần lặp danh sách user')
     }
     stages {
         stage('Load Test with Newman') {
@@ -9,26 +10,30 @@ pipeline {
                 script {
                     def users = readCSV(file: 'users.csv')
                     def jobs = [:]
+                    def loopCount = params.LOOP_COUNT.toInteger()
 
-                    users.eachWithIndex { user, index ->
-                        jobs["User_${index}"] = {
-                            node {
-                                stage("Run Newman for User ${user.username}") {
-                                    docker.image('postman/newman').inside {
-                                        withEnv([
-                                            "NEWMAN_COLLECTION=LMS.postman_collection.json",
-                                            "NEWMAN_ENVIRONMENT=LMS.postman_environment.json",
-                                            "USERNAME=${user.username}",
-                                            "PASSWORD=${user.password}"
-                                        ]) {
-                                            sh '''
-                                            newman run $NEWMAN_COLLECTION \
-                                            --environment $NEWMAN_ENVIRONMENT \
-                                            --env-var "username=$USERNAME" \
-                                            --env-var "password=$PASSWORD" \
-                                            --reporters cli,json \
-                                            --reporter-json-export results_${USERNAME}.json
-                                            '''
+                    for (int loop = 0; loop < loopCount; loop++) {
+                        users.eachWithIndex { user, index ->
+                            def jobName = "Loop_${loop}_User_${index}"
+                            jobs[jobName] = {
+                                node {
+                                    stage("Run Newman for ${user.username} (Loop ${loop + 1})") {
+                                        docker.image('postman/newman').inside {
+                                            withEnv([
+                                                "NEWMAN_COLLECTION=LMS.postman_collection.json",
+                                                "NEWMAN_ENVIRONMENT=LMS.postman_environment.json",
+                                                "USERNAME=${user.username}",
+                                                "PASSWORD=${user.password}"
+                                            ]) {
+                                                sh '''
+                                                newman run $NEWMAN_COLLECTION \
+                                                --environment $NEWMAN_ENVIRONMENT \
+                                                --env-var "username=$USERNAME" \
+                                                --env-var "password=$PASSWORD" \
+                                                --reporters cli,json \
+                                                --reporter-json-export results_${USERNAME}_loop_${LOOP}.json
+                                                '''
+                                            }
                                         }
                                     }
                                 }
@@ -55,7 +60,7 @@ pipeline {
                         do
                             curl -i -XPOST "https://us-east-1-1.aws.cloud2.influxdata.com/api/v2/write?org=YOUR_ORG&bucket=YOUR_BUCKET&precision=s" \
                             --header "Authorization: Token DSGJgx1OEMr7lRnMPI2CKVfAbfudU19OsFhrkIHHCZroYzCz3Sc9E9fHRit380Gz6WRhxF74f3nvk_wTf6nPLw==" \
-                            --data-binary "newman_results,api=$(echo $line | jq -r .name) response_time=$(echo $line | jq -r .responseTime),status=$(echo $line | jq -r .status)"
+                            --data-binary "newman_results,api=$(echo $line | jq -r .name) response_time=$(echo $line | jq -r .responseTime),status=$(echo $line | jq -r .status) loop=${LOOP}"
                         done
                     '''
                 }
